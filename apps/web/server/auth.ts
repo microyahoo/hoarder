@@ -7,6 +7,10 @@ import NextAuth, {
   NextAuthOptions,
 } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
+import GithubProvider from "next-auth/providers/github";
+import MicrosoftProvider from "next-auth/providers/azure-ad";
+import TwitterProvider from "next-auth/providers/twitter";
 import { Provider } from "next-auth/providers/index";
 import requestIp from "request-ip";
 
@@ -71,6 +75,24 @@ async function isAdmin(email: string): Promise<boolean> {
 }
 
 const providers: Provider[] = [
+  GoogleProvider({
+    clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  }),
+  GithubProvider({
+    clientId: process.env.GITHUB_ID ?? "",
+    clientSecret: process.env.GITHUB_SECRET ?? "",
+  }),
+  MicrosoftProvider({
+    clientId: process.env.MICROSOFT_ID ?? "",
+    clientSecret: process.env.MICROSOFT_SECRET ?? "",
+    tenantId: process.env.MICROSOFT_TENANT_ID,
+  }),
+  TwitterProvider({
+    clientId: process.env.TWITTER_ID ?? "",
+    clientSecret: process.env.TWITTER_SECRET ?? "",
+    version: "2.0",
+  }),
   CredentialsProvider({
     // The name to display on the sign in form (e.g. "Sign in with...")
     name: "Credentials",
