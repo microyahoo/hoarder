@@ -1,7 +1,7 @@
 import assert from "assert";
 import * as dns from "dns";
 import * as path from "node:path";
-import type { Browser } from "puppeteer";
+import type { Browser, Page } from "puppeteer";
 import { Readability } from "@mozilla/readability";
 import { Mutex } from "async-mutex";
 import DOMPurify from "dompurify";
@@ -226,60 +226,87 @@ function validateUrl(url: string) {
 }
 
 async function crawlPage(jobId: string, url: string) {
-  let browser: Browser;
-  if (serverConfig.crawler.browserConnectOnDemand) {
-    browser = await startBrowserInstance();
-  } else {
-    assert(globalBrowser);
-    browser = globalBrowser;
-  }
-  assert(browser);
-  const context = await browser.createBrowserContext();
-
+  await RateLimiter.getInstance().waitForSlot();
+  
+  const page = await globalBrowser!.newPage();
   try {
-    const page = await context.newPage();
-    await page.setUserAgent(
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    );
-
+    await setupPage(page);
+    
+    // 随机延迟
+    const randomDelay = Math.floor(Math.random() * 2000) + 1000;
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+    
     await page.goto(url, {
-      timeout: serverConfig.crawler.navigateTimeoutSec * 1000,
+      timeout: CRAWLER_CONFIG.requestTimeout,
+      waitUntil: 'networkidle0',
     });
-    logger.info(
-      `[Crawler][${jobId}] Successfully navigated to "${url}". Waiting for the page to load ...`,
-    );
+    
+    // 模拟人类行为
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    let browser: Browser;
+    if (serverConfig.crawler.browserConnectOnDemand) {
+      browser = await startBrowserInstance();
+    } else {
+      assert(globalBrowser);
+      browser = globalBrowser;
+    }
+    assert(browser);
+    const context = await browser.createBrowserContext();
 
-    // Wait until there's at most two connections for 2 seconds
-    // Attempt to wait only for 5 seconds
-    await Promise.race([
-      page.waitForNetworkIdle({
-        idleTime: 1000, // 1 sec
-        concurrency: 2,
-      }),
-      new Promise((f) => setTimeout(f, 5000)),
-    ]);
+    try {
+      const page = await context.newPage();
+      await page.setUserAgent(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      );
 
-    logger.info(`[Crawler][${jobId}] Finished waiting for the page to load.`);
+      await page.goto(url, {
+        timeout: serverConfig.crawler.navigateTimeoutSec * 1000,
+      });
+      logger.info(
+        `[Crawler][${jobId}] Successfully navigated to "${url}". Waiting for the page to load ...`,
+      );
 
-    const [htmlContent, screenshot] = await Promise.all([
-      page.content(),
-      page.screenshot({
-        // If you change this, you need to change the asset type in the store function.
-        type: "png",
-        encoding: "binary",
-        fullPage: serverConfig.crawler.fullPageScreenshot,
-      }),
-    ]);
-    logger.info(
-      `[Crawler][${jobId}] Finished capturing page content and a screenshot. FullPageScreenshot: ${serverConfig.crawler.fullPageScreenshot}`,
-    );
-    return {
-      htmlContent,
-      screenshot,
-      url: page.url(),
-    };
+      // Wait until there's at most two connections for 2 seconds
+      // Attempt to wait only for 5 seconds
+      await Promise.race([
+        page.waitForNetworkIdle({
+          idleTime: 1000, // 1 sec
+          concurrency: 2,
+        }),
+        new Promise((f) => setTimeout(f, 5000)),
+      ]);
+
+      logger.info(`[Crawler][${jobId}] Finished waiting for the page to load.`);
+
+      const [htmlContent, screenshot] = await Promise.all([
+        page.content(),
+        page.screenshot({
+          // If you change this, you need to change the asset type in the store function.
+          type: "png",
+          encoding: "binary",
+          fullPage: serverConfig.crawler.fullPageScreenshot,
+        }),
+      ]);
+      logger.info(
+        `[Crawler][${jobId}] Finished capturing page content and a screenshot. FullPageScreenshot: ${serverConfig.crawler.fullPageScreenshot}`,
+      );
+      return {
+        htmlContent,
+        screenshot,
+        url: page.url(),
+      };
+    } finally {
+      await context.close();
+    }
+  } catch (error) {
+    logger.error(`[Crawler][${jobId}] Failed to crawl page: ${error}`);
+    throw error;
   } finally {
-    await context.close();
+    await page.close();
   }
 }
 
@@ -687,4 +714,78 @@ async function runCrawler(job: DequeuedJob<ZCrawlLinkRequest>) {
 
   // Do the archival as a separate last step as it has the potential for failure
   await archivalLogic();
+}
+
+const CRAWLER_CONFIG = {
+  maxConcurrency: serverConfig.crawler.numWorkers || 5,
+  retryLimit: 3,
+  retryDelay: 1000,
+  requestTimeout: serverConfig.crawler.navigateTimeoutSec * 1000,
+  rateLimitWindow: 60000,
+  maxRequestsPerWindow: 30,
+};
+
+class RequestHeaderGenerator {
+  private static userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+  ];
+  
+  static getHeaders() {
+    return {
+      'User-Agent': this.userAgents[Math.floor(Math.random() * this.userAgents.length)],
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    };
+  }
+}
+
+class RateLimiter {
+  private static instance: RateLimiter;
+  private timestamps: number[] = [];
+  
+  static getInstance() {
+    if (!this.instance) {
+      this.instance = new RateLimiter();
+    }
+    return this.instance;
+  }
+  
+  async waitForSlot(): Promise<void> {
+    const now = Date.now();
+    this.timestamps = this.timestamps.filter(t => now - t < CRAWLER_CONFIG.rateLimitWindow);
+    
+    if (this.timestamps.length >= CRAWLER_CONFIG.maxRequestsPerWindow) {
+      const oldestTimestamp = this.timestamps[0];
+      const waitTime = CRAWLER_CONFIG.rateLimitWindow - (now - oldestTimestamp);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.timestamps.push(now);
+  }
+}
+
+async function setupPage(page: Page) {
+  const headers = RequestHeaderGenerator.getHeaders();
+  await page.setExtraHTTPHeaders(headers);
+  
+  // 随机化指纹
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    Object.defineProperty(navigator, 'plugins', { get: () => [] });
+  });
+  
+  // 拦截某些请求
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    if (request.resourceType() === 'image' || request.resourceType() === 'font') {
+      request.abort();
+    } else {
+      request.continue();
+    }
+  });
 }
