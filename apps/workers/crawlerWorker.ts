@@ -53,7 +53,18 @@ import {
   triggerVideoWorker,
   zCrawlLinkRequestSchema,
 } from "@hoarder/shared/queues";
-import { BookmarkTypes } from "@hoarder/shared/types/bookmarks";
+import {
+  BookmarkTypes,
+} from "@hoarder/shared/types/bookmarks";
+import {
+  crawlerRequestsTotal,
+  crawlerRequestDuration,
+  crawlerActiveRequests,
+  crawlerErrors,
+  crawlerActiveSessions,
+  crawlerMemoryUsage,
+  crawlerQueueSize,
+} from "@hoarder/shared/metrics";
 
 const metascraperParser = metascraper([
   metascraperAmazon(),
@@ -226,10 +237,12 @@ function validateUrl(url: string) {
 }
 
 async function crawlPage(jobId: string, url: string) {
-  await RateLimiter.getInstance().waitForSlot();
+  const domain = new URL(url).hostname;
+  const start = Date.now();
   
-  const page = await globalBrowser!.newPage();
   try {
+    crawlerActiveRequests.inc({ domain });
+    const page = await globalBrowser!.newPage();
     await setupPage(page);
     
     // 随机延迟
@@ -299,11 +312,15 @@ async function crawlPage(jobId: string, url: string) {
         screenshot,
         url: page.url(),
       };
+    } catch (error) {
+      crawlerErrors.inc({ type: error.name || 'unknown', domain });
+      throw error;
     } finally {
-      await context.close();
+      crawlerActiveRequests.dec({ domain });
+      crawlerRequestDuration.observe({ domain }, (Date.now() - start) / 1000);
     }
   } catch (error) {
-    logger.error(`[Crawler][${jobId}] Failed to crawl page: ${error}`);
+    crawlerErrors.inc({ type: error.name || 'unknown', domain });
     throw error;
   } finally {
     await page.close();
@@ -746,15 +763,11 @@ class RequestHeaderGenerator {
 class RateLimiter {
   private static instance: RateLimiter;
   private timestamps: number[] = [];
-  
-  static getInstance() {
-    if (!this.instance) {
-      this.instance = new RateLimiter();
-    }
-    return this.instance;
-  }
-  
+  private domain: string;
+
   async waitForSlot(): Promise<void> {
+    // Update queue size metric
+    crawlerQueueSize.set({ priority: 'normal' }, this.timestamps.length);
     const now = Date.now();
     this.timestamps = this.timestamps.filter(t => now - t < CRAWLER_CONFIG.rateLimitWindow);
     
@@ -765,6 +778,21 @@ class RateLimiter {
     }
     
     this.timestamps.push(now);
+  }
+}
+
+// 添加内存使用监控
+setInterval(() => {
+  const usage = process.memoryUsage();
+  crawlerMemoryUsage.set(usage.heapUsed);
+}, 30000);
+
+// 在 Cookie 管理相关的代码中添加会话计数
+function updateCookieMetrics(domain: string, hasValidSession: boolean) {
+  if (hasValidSession) {
+    crawlerActiveSessions.inc({ domain });
+  } else {
+    crawlerActiveSessions.dec({ domain });
   }
 }
 
