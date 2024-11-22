@@ -12,10 +12,10 @@ import { FeedQueue } from "@hoarder/shared/queues";
 import { BookmarkTypes } from "@hoarder/shared/types/bookmarks";
 
 export const FeedRefreshingWorker = cron.schedule(
-  "0 * * * *",
+  "0 * * * *", // at minute 0
   () => {
     logger.info("[feed] Scheduling feed refreshing jobs ...");
-    db.query.rssFeedsTable
+    db.query.rssFeedsTable // 查询 rss feeds 表
       .findMany({
         columns: {
           id: true,
@@ -23,7 +23,7 @@ export const FeedRefreshingWorker = cron.schedule(
       })
       .then((feeds) => {
         for (const feed of feeds) {
-          FeedQueue.enqueue(
+          FeedQueue.enqueue( // 将其加入到 FeedQueue 中
             {
               feedId: feed.id,
             },

@@ -51,7 +51,7 @@ async function attemptMarkTaggingStatus(
   try {
     const request = zOpenAIRequestSchema.parse(jobData);
     await db
-      .update(bookmarks)
+      .update(bookmarks) // 设置 db 中 bookmark 的 tagging status
       .set({
         taggingStatus: status,
       })
@@ -298,14 +298,14 @@ async function inferTags(
 ) {
   let response;
   if (bookmark.link || bookmark.text) {
-    response = await inferTagsFromText(bookmark, inferenceClient);
+    response = await inferTagsFromText(bookmark, inferenceClient); // 文本
   } else if (bookmark.asset) {
     switch (bookmark.asset.assetType) {
       case "image":
-        response = await inferTagsFromImage(jobId, bookmark, inferenceClient);
+        response = await inferTagsFromImage(jobId, bookmark, inferenceClient); // 图片
         break;
       case "pdf":
-        response = await inferTagsFromPDF(jobId, bookmark, inferenceClient);
+        response = await inferTagsFromPDF(jobId, bookmark, inferenceClient); // PDF
         break;
       default:
         throw new Error(`[inference][${jobId}] Unsupported bookmark type`);
@@ -448,7 +448,7 @@ async function runOpenAI(job: DequeuedJob<ZOpenAIRequest>) {
   }
 
   const { bookmarkId } = request.data;
-  const bookmark = await fetchBookmark(bookmarkId);
+  const bookmark = await fetchBookmark(bookmarkId); // 从 db 中获取 bookmark
   if (!bookmark) {
     throw new Error(
       `[inference][${jobId}] bookmark with id ${bookmarkId} was not found`,

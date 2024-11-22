@@ -23,13 +23,13 @@ export const IMAGE_ASSET_TYPES: Set<string> = new Set<string>([
 ]);
 
 // The assets that we allow the users to upload
-export const SUPPORTED_UPLOAD_ASSET_TYPES: Set<string> = new Set<string>([
+export const SUPPORTED_UPLOAD_ASSET_TYPES: Set<string> = new Set<string>([ // 定义支持的上传类型
   ...IMAGE_ASSET_TYPES,
   ASSET_TYPES.APPLICATION_PDF,
 ]);
 
 // The assets that we support saving in the asset db
-export const SUPPORTED_ASSET_TYPES: Set<string> = new Set<string>([
+export const SUPPORTED_ASSET_TYPES: Set<string> = new Set<string>([ // 定义支持的 asset 类型
   ...SUPPORTED_UPLOAD_ASSET_TYPES,
   ASSET_TYPES.TEXT_HTML,
   ASSET_TYPES.VIDEO_MP4,
@@ -63,9 +63,9 @@ export async function saveAsset({
     throw new Error("Unsupported asset type");
   }
   const assetDir = getAssetDir(userId, assetId);
-  await fs.promises.mkdir(assetDir, { recursive: true });
+  await fs.promises.mkdir(assetDir, { recursive: true }); // 创建 asset 目录，用于保存 asset
 
-  await Promise.all([
+  await Promise.all([ // 分别写数据和元数据
     fs.promises.writeFile(path.join(assetDir, "asset.bin"), asset),
     fs.promises.writeFile(
       path.join(assetDir, "metadata.json"),
@@ -94,7 +94,7 @@ export async function saveAssetFromFile({
   await Promise.all([
     // We'll have to copy first then delete the original file as inside the docker container
     // we can't move file between mounts.
-    fs.promises.copyFile(assetPath, path.join(assetDir, "asset.bin")),
+    fs.promises.copyFile(assetPath, path.join(assetDir, "asset.bin")), // 将临时保存的 assetPath 拷贝到 assetDir/asset.bin
     fs.promises.writeFile(
       path.join(assetDir, "metadata.json"),
       JSON.stringify(metadata),
@@ -175,7 +175,7 @@ export async function deleteAsset({
   userId: string;
   assetId: string;
 }) {
-  const assetDir = getAssetDir(userId, assetId);
+  const assetDir = getAssetDir(userId, assetId); // 删除对应的 asset 目录
   await fs.promises.rm(path.join(assetDir), { recursive: true });
 }
 

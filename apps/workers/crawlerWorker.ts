@@ -105,7 +105,7 @@ async function startBrowserInstance() {
     });
   } else {
     logger.info(`Launching a new browser instance`);
-    return puppeteer.launch({
+    return puppeteer.launch({ // 启动 puppeteer
       headless: serverConfig.crawler.headlessBrowser,
       defaultViewport,
     });
@@ -116,7 +116,7 @@ async function launchBrowser() {
   globalBrowser = undefined;
   await browserMutex.runExclusive(async () => {
     try {
-      globalBrowser = await startBrowserInstance();
+      globalBrowser = await startBrowserInstance(); // 启动 browser instance
     } catch (e) {
       logger.error(
         `[Crawler] Failed to connect to the browser instance, will retry in 5 secs: ${(e as Error).stack}`,
@@ -163,7 +163,7 @@ export class CrawlerWorker {
       }
     }
     if (!serverConfig.crawler.browserConnectOnDemand) {
-      await launchBrowser();
+      await launchBrowser(); // launch browser
     } else {
       logger.info(
         "[Crawler] Browser connect on demand is enabled, won't proactively start the browser instance",
@@ -175,7 +175,7 @@ export class CrawlerWorker {
       LinkCrawlerQueue,
       {
         run: withTimeout(
-          runCrawler,
+          runCrawler, // 运行爬虫
           /* timeoutSec */ serverConfig.crawler.jobTimeoutSec,
         ),
         onComplete: async (job) => {
@@ -183,7 +183,7 @@ export class CrawlerWorker {
           logger.info(`[Crawler][${jobId}] Completed successfully`);
           const bookmarkId = job.data.bookmarkId;
           if (bookmarkId) {
-            await changeBookmarkStatus(bookmarkId, "success");
+            await changeBookmarkStatus(bookmarkId, "success"); // 更新 db 中 bookmarkLinks 的状态为 success
           }
         },
         onError: async (job) => {
@@ -193,7 +193,7 @@ export class CrawlerWorker {
           );
           const bookmarkId = job.data?.bookmarkId;
           if (bookmarkId && job.numRetriesLeft == 0) {
-            await changeBookmarkStatus(bookmarkId, "failure");
+            await changeBookmarkStatus(bookmarkId, "failure"); // 更新 db 中 bookmarkLinks 的状态为 failure
           }
         },
       },
@@ -243,7 +243,7 @@ async function crawlPage(jobId: string, url: string) {
   if (serverConfig.crawler.browserConnectOnDemand) {
     browser = await startBrowserInstance();
   } else {
-    assert(globalBrowser);
+    assert(globalBrowser); // 如果不是 on demand 的话使用全局的 browser
     browser = globalBrowser;
   }
   assert(browser);
@@ -277,14 +277,14 @@ async function crawlPage(jobId: string, url: string) {
 
     logger.info(`[Crawler][${jobId}] Finished waiting for the page to load.`);
 
-    const htmlContent = await page.content();
+    const htmlContent = await page.content(); // 页面内容
     logger.info(`[Crawler][${jobId}] Successfully fetched the page content.`);
 
     let screenshot: Buffer | undefined = undefined;
     if (serverConfig.crawler.storeScreenshot) {
       screenshot = await Promise.race<Buffer | undefined>([
         page
-          .screenshot({
+          .screenshot({ // 页面截图
             // If you change this, you need to change the asset type in the store function.
             type: "png",
             encoding: "binary",
@@ -320,7 +320,7 @@ async function extractMetadata(
   logger.info(
     `[Crawler][${jobId}] Will attempt to extract metadata from page ...`,
   );
-  const meta = await metascraperParser({
+  const meta = await metascraperParser({ // https://github.com/microlinkhq/metascraper
     url,
     html: htmlContent,
     // We don't want to validate the URL again as we've already done it by visiting the page.
@@ -446,7 +446,7 @@ async function archiveWebpage(
 
   await execa({
     input: html,
-  })("monolith", ["-", "-Ije", "-t", "5", "-b", url, "-o", assetPath]);
+  })("monolith", ["-", "-Ije", "-t", "5", "-b", url, "-o", assetPath]); // https://github.com/Y2Z/monolith
 
   const contentType = "text/html";
 
@@ -563,9 +563,9 @@ async function crawlAndParseUrl(
   } = await crawlPage(jobId, url);
 
   const [meta, readableContent, screenshotAssetInfo] = await Promise.all([
-    extractMetadata(htmlContent, browserUrl, jobId),
+    extractMetadata(htmlContent, browserUrl, jobId), // 提取元数据
     extractReadableContent(htmlContent, browserUrl, jobId),
-    storeScreenshot(screenshot, userId, jobId),
+    storeScreenshot(screenshot, userId, jobId), // 保存屏幕截图
   ]);
   let imageAssetInfo: DBAssetType | null = null;
   if (meta.image) {
@@ -583,7 +583,7 @@ async function crawlAndParseUrl(
   }
 
   // TODO(important): Restrict the size of content to store
-  await db.transaction(async (txn) => {
+  await db.transaction(async (txn) => { // 更新数据库中的对应的 bookmarkLinks 信息
     await txn
       .update(bookmarkLinks)
       .set({
@@ -624,7 +624,7 @@ async function crawlAndParseUrl(
   ]);
 
   return async () => {
-    if (serverConfig.crawler.fullPageArchive || archiveFullPage) {
+    if (serverConfig.crawler.fullPageArchive || archiveFullPage) { // 是否要 archive 完整的页面
       const {
         assetId: fullPageArchiveAssetId,
         size,
@@ -708,18 +708,18 @@ async function runCrawler(job: DequeuedJob<ZCrawlLinkRequest>) {
   }
 
   // Enqueue openai job (if not set, assume it's true for backward compatibility)
-  if (job.data.runInference !== false) {
+  if (job.data.runInference !== false) { // 如果设置了 inference，则将对应的 bookmark id 加入到 openai 队列
     await OpenAIQueue.enqueue({
       bookmarkId,
     });
   }
 
   // Update the search index
-  await triggerSearchReindex(bookmarkId);
+  await triggerSearchReindex(bookmarkId); // trigger 搜索引擎 reindex
 
   // Trigger a potential download of a video from the URL
-  await triggerVideoWorker(bookmarkId, url);
+  await triggerVideoWorker(bookmarkId, url); // trigger 视频处理
 
   // Do the archival as a separate last step as it has the potential for failure
-  await archivalLogic();
+  await archivalLogic(); // 最后执行 archive
 }

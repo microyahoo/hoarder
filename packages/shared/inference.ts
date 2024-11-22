@@ -28,6 +28,7 @@ export interface InferenceClient {
     image: string,
     opts: InferenceOptions,
   ): Promise<InferenceResponse>;
+  // TODO: inferFromVideo();
 }
 
 export class InferenceClientFactory {
@@ -39,6 +40,7 @@ export class InferenceClientFactory {
     if (serverConfig.inference.ollamaBaseUrl) {
       return new OllamaInferenceClient();
     }
+    // TODO: 支持更多的推理客户端
     return null;
   }
 }
@@ -120,7 +122,7 @@ class OllamaInferenceClient implements InferenceClient {
     image?: string,
     opts: InferenceOptions = defaultInferenceOptions,
   ) {
-    const chatCompletion = await this.ollama.chat({
+    const chatCompletion = await this.ollama.chat({ // 返回迭代器
       model: model,
       format: opts.json ? "json" : undefined,
       stream: true,

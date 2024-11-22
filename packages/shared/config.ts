@@ -24,7 +24,7 @@ const allEnv = z.object({
   INFERENCE_JOB_TIMEOUT_SEC: z.coerce.number().default(30),
   INFERENCE_TEXT_MODEL: z.string().default("gpt-4o-mini"),
   INFERENCE_IMAGE_MODEL: z.string().default("gpt-4o-mini"),
-  INFERENCE_CONTEXT_LENGTH: z.coerce.number().default(2048),
+  INFERENCE_CONTEXT_LENGTH: z.coerce.number().default(2048), // context length
   OCR_CACHE_DIR: z.string().optional(),
   OCR_LANGS: z
     .string()
@@ -35,9 +35,9 @@ const allEnv = z.object({
   BROWSER_WEB_URL: z.string().url().optional(),
   BROWSER_WEBSOCKET_URL: z.string().url().optional(),
   BROWSER_CONNECT_ONDEMAND: stringBool("false"),
-  CRAWLER_JOB_TIMEOUT_SEC: z.coerce.number().default(60),
+  CRAWLER_JOB_TIMEOUT_SEC: z.coerce.number().default(60), // 60s
   CRAWLER_NAVIGATE_TIMEOUT_SEC: z.coerce.number().default(30),
-  CRAWLER_NUM_WORKERS: z.coerce.number().default(1),
+  CRAWLER_NUM_WORKERS: z.coerce.number().default(1), // 并发
   CRAWLER_DOWNLOAD_BANNER_IMAGE: stringBool("true"),
   CRAWLER_STORE_SCREENSHOT: stringBool("true"),
   CRAWLER_FULL_PAGE_SCREENSHOT: stringBool("false"),
@@ -85,7 +85,7 @@ const serverConfigSchema = allEnv.transform((val) => {
       openAIBaseUrl: val.OPENAI_BASE_URL,
       ollamaBaseUrl: val.OLLAMA_BASE_URL,
       ollamaKeepAlive: val.OLLAMA_KEEP_ALIVE,
-      textModel: val.INFERENCE_TEXT_MODEL,
+      textModel: val.INFERENCE_TEXT_MODEL, // 其他模型
       imageModel: val.INFERENCE_IMAGE_MODEL,
       inferredTagLang: val.INFERENCE_LANG,
       contextLength: val.INFERENCE_CONTEXT_LENGTH,
@@ -129,7 +129,7 @@ const serverConfigSchema = allEnv.transform((val) => {
     maxAssetSizeMb: val.MAX_ASSET_SIZE_MB,
     serverVersion: val.SERVER_VERSION,
     disableNewReleaseCheck: val.DISABLE_NEW_RELEASE_CHECK,
-    usingLegacySeparateContainers: val.USING_LEGACY_SEPARATE_CONTAINERS,
+    usingLegacySeparateContainers: val.USING_LEGACY_SEPARATE_CONTAINERS, // need check
   };
 });
 

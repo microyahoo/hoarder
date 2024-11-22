@@ -25,7 +25,7 @@ async function main() {
     VideoWorker.build(),
     FeedWorker.build(),
   ];
-  FeedRefreshingWorker.start();
+  FeedRefreshingWorker.start(); // 启动刷新 rss feeds 的调度任务
 
   await Promise.any([
     Promise.all([

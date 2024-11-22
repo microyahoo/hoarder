@@ -14,7 +14,7 @@ export function runQueueDBMigrations() {
 
 // Link Crawler
 export const zCrawlLinkRequestSchema = z.object({
-  bookmarkId: z.string(),
+  bookmarkId: z.string(), // bookmarkId
   runInference: z.boolean().optional(),
   archiveFullPage: z.boolean().optional().default(false),
 });
@@ -85,7 +85,7 @@ export const TidyAssetsQueue = new SqliteQueue<ZTidyAssetsRequest>(
 );
 
 export async function triggerSearchReindex(bookmarkId: string) {
-  await SearchIndexingQueue.enqueue({
+  await SearchIndexingQueue.enqueue({ // 将对应的 bookmark id 加入到 search indexing 队列
     bookmarkId,
     type: "index",
   });
@@ -94,7 +94,7 @@ export async function triggerSearchReindex(bookmarkId: string) {
 export async function triggerSearchDeletion(bookmarkId: string) {
   await SearchIndexingQueue.enqueue({
     bookmarkId: bookmarkId,
-    type: "delete",
+    type: "delete", // 根据类型来区分是 index 和 delete
   });
 }
 
@@ -116,7 +116,7 @@ export const VideoWorkerQueue = new SqliteQueue<ZVideoRequest>(
 );
 
 export async function triggerVideoWorker(bookmarkId: string, url: string) {
-  await VideoWorkerQueue.enqueue({
+  await VideoWorkerQueue.enqueue({ // 将对应的 bookmark id 加入到 video worker 队列
     bookmarkId,
     url,
   });
