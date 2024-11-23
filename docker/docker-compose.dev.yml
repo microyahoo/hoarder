@@ -9,7 +9,7 @@ services:
     ports:
       - 3000:3000
     env_file:
-      - .env  # Automatically load all variables from this file
+      - env.txt
     command:
       - pnpm
       - web
@@ -61,7 +61,7 @@ services:
     command:
      - /bin/sh
      - -c
-     - "pnpm install --frozen-lockfile && pnpm run db:migrate"
+     - "pnpm install && pnpm run db:migrate"
 
 volumes:
   meilisearch:
