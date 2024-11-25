@@ -26,7 +26,7 @@
     "@hoarder/eslint-config": "workspace:^0.2.0",
     "@hoarder/prettier-config": "workspace:^0.1.0",
     "@hoarder/tsconfig": "workspace:^0.1.0",
-    "eslint": "^8.57.0",
+    "eslint": "^9.15.0",
     "prettier": "^3.2.5",
     "typescript": "^5.3.3"
   },
