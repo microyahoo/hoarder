@@ -12,7 +12,7 @@ import { FeedQueue } from "@hoarder/shared/queues";
 import { BookmarkTypes } from "@hoarder/shared/types/bookmarks";
 
 export const FeedRefreshingWorker = cron.schedule(
-  "0 * * * *",
+  "0 * * * *", // at minute 0
   () => {
     logger.info("[feed] Scheduling feed refreshing jobs ...");
     db.query.rssFeedsTable

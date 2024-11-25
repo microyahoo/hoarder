@@ -43,6 +43,7 @@
     "@trpc/client": "11.0.0-next-beta.308",
     "@trpc/react-query": "11.0.0-next-beta.308",
     "@trpc/server": "11.0.0-next-beta.308",
+    "axios": "^1.7.7",
     "better-sqlite3": "^11.3.0",
     "cheerio": "^1.0.0",
     "class-variance-authority": "^0.7.0",

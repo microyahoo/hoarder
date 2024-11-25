@@ -8,7 +8,9 @@ const withPWA = pwa({
 /** @type {import('next').NextConfig} */
 const nextConfig = withPWA({
   output: "standalone",
+  transpilePackages: ['axios'],
   webpack: (config) => {
+    config.externals = [...(config.externals || []), 'axios'];
     config.module.rules.push({
       test: /\.svg$/,
       use: ["@svgr/webpack"],

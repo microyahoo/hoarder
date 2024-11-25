@@ -10,8 +10,8 @@ RUN corepack enable
 RUN apk add --no-cache libc6-compat make g++ py3-pip linux-headers
 
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED 1
-ENV PUPPETEER_SKIP_DOWNLOAD true
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # Build the db migration script
@@ -40,8 +40,8 @@ ENV SERVER_VERSION=${SERVER_VERSION}
 
 USER root
 
-ENV PORT 3000
-ENV HOSTNAME "0.0.0.0"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 EXPOSE 3000
 
 ######################
@@ -73,8 +73,8 @@ RUN apk add --no-cache monolith yt-dlp
 # Prepare the web app
 ######################
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=base --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=base /app/apps/web/public ./apps/web/public

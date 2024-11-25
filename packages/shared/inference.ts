@@ -1,5 +1,6 @@
 import { Ollama } from "ollama";
 import OpenAI from "openai";
+import axios from "axios";
 
 import serverConfig from "./config";
 import logger from "./logger";
@@ -28,6 +29,7 @@ export interface InferenceClient {
     image: string,
     opts: InferenceOptions,
   ): Promise<InferenceResponse>;
+  // TODO: inferFromVideo();
 }
 
 export class InferenceClientFactory {
@@ -38,6 +40,10 @@ export class InferenceClientFactory {
 
     if (serverConfig.inference.ollamaBaseUrl) {
       return new OllamaInferenceClient();
+    }
+    // TODO: support more AI clients
+    if (serverConfig.inference.zhipuApiKey) {
+      return new ZhipuInferenceClient();
     }
     return null;
   }
@@ -182,5 +188,110 @@ class OllamaInferenceClient implements InferenceClient {
       image,
       opts,
     );
+  }
+}
+
+class ZhipuInferenceClient implements InferenceClient {
+  private baseUrl: string;
+  private apiKey: string;
+
+  constructor() {
+    this.baseUrl = serverConfig.inference.zhipuBaseUrl || "https://open.bigmodel.cn/api/paas/v4";
+    this.apiKey = serverConfig.inference.zhipuApiKey!;
+  }
+
+  private ensureValidJSON(content: string): string {
+    try {
+      JSON.parse(content);
+      return content;
+    } catch (e) {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          JSON.parse(jsonMatch[0]);
+          return jsonMatch[0];
+        } catch (e) {
+          throw new Error("Unable to extract valid JSON from response");
+        }
+      }
+      throw new Error("Response is not in JSON format");
+    }
+  }
+
+  async inferFromText(
+    prompt: string,
+    opts: InferenceOptions = defaultInferenceOptions,
+  ): Promise<InferenceResponse> {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/chat/completions`,
+        {
+          model: serverConfig.inference.textModel,
+          messages: [{ role: "user", content: prompt }],
+          stream: false,
+          ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const content = response.data.choices[0].message.content;
+      const processedContent = opts.json ? this.ensureValidJSON(content) : content;
+      return {
+        response: processedContent,
+        totalTokens: response.data.usage?.total_tokens,
+      };
+    } catch (error) {
+      logger.error("Error in ZhipuInferenceClient.inferFromText:", error);
+      throw error;
+    }
+  }
+
+  async inferFromImage(
+    prompt: string,
+    contentType: string,
+    image: string,
+    opts: InferenceOptions = defaultInferenceOptions,
+  ): Promise<InferenceResponse> {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/chat/completions`,
+        {
+          model: serverConfig.inference.imageModel,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: image } },
+              ],
+            },
+          ],
+          stream: false,
+          ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const content = response.data.choices[0].message.content;
+      const processedContent = opts.json ? this.ensureValidJSON(content) : content;
+
+      return {
+        response: processedContent,
+        totalTokens: response.data.usage?.total_tokens,
+      };
+    } catch (error) {
+      logger.error("Error in ZhipuInferenceClient.inferFromImage:", error);
+      throw error;
+    }
   }
 }
