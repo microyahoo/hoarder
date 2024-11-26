@@ -336,7 +336,7 @@ async function inferTags(
 
     return tags;
   } catch (e) {
-    const responseSneak = response.response.substring(0, 20);
+    const responseSneak = response.response.substring(0, 100);
     throw new Error(
       `[inference][${jobId}] The model ignored our prompt and didn't respond with the expected JSON: ${JSON.stringify(e)}. Here's a sneak peak from the response: ${responseSneak}`,
     );

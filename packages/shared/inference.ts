@@ -200,16 +200,42 @@ class ZhipuInferenceClient implements InferenceClient {
     this.apiKey = serverConfig.inference.zhipuApiKey!;
   }
 
+  private formatPromptForJSON(prompt: string): string {
+    return `${prompt}\n请以JSON格式返回结果，确保返回的是有效的JSON字符串。例如：{"key": "value"}`;
+  }
+
+  private ensureValidJSON(content: string): string {
+    try {
+      // 尝试解析为 JSON
+      JSON.parse(content);
+      return content;
+    } catch (e) {
+      // 如果不是有效的 JSON，尝试提取 JSON 部分
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          JSON.parse(jsonMatch[0]);
+          return jsonMatch[0];
+        } catch (e) {
+          // 如果提取的部分仍然不是有效的 JSON
+          throw new Error("Unable to extract valid JSON from response");
+        }
+      }
+      throw new Error("Response is not in JSON format");
+    }
+  }
+
   async inferFromText(
     prompt: string,
     opts: InferenceOptions = defaultInferenceOptions,
   ): Promise<InferenceResponse> {
     try {
+      const finalPrompt = opts.json ? this.formatPromptForJSON(prompt) : prompt;
       const response = await axios.post(
         `${this.baseUrl}/chat/completions`,
         {
           model: serverConfig.inference.textModel,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: finalPrompt }],
           stream: false,
           ...(opts.json ? { response_format: { type: "json_object" } } : {}),
         },
@@ -221,8 +247,15 @@ class ZhipuInferenceClient implements InferenceClient {
         }
       );
 
+      if (!response.data?.choices?.[0]?.message?.content) {
+        throw new Error(`The model ignored our prompt and didn't respond with the expected format`);
+      }
+
+      const content = response.data.choices[0].message.content;
+      const processedContent = opts.json ? this.ensureValidJSON(content) : content;
+
       return {
-        response: response.data.choices[0].message.content,
+        response: processedContent,
         totalTokens: response.data.usage?.total_tokens,
       };
     } catch (error) {
@@ -238,6 +271,7 @@ class ZhipuInferenceClient implements InferenceClient {
     opts: InferenceOptions = defaultInferenceOptions,
   ): Promise<InferenceResponse> {
     try {
+      const finalPrompt = opts.json ? this.formatPromptForJSON(prompt) : prompt;
       const response = await axios.post(
         `${this.baseUrl}/chat/completions`,
         {
@@ -246,7 +280,7 @@ class ZhipuInferenceClient implements InferenceClient {
             {
               role: "user",
               content: [
-                { type: "text", text: prompt },
+                { type: "text", text: finalPrompt },
                 { type: "image_url", image_url: { url: image } },
               ],
             },
@@ -262,8 +296,15 @@ class ZhipuInferenceClient implements InferenceClient {
         }
       );
 
+      if (!response.data?.choices?.[0]?.message?.content) {
+        throw new Error(`The model ignored our prompt and didn't respond with the expected format`);
+      }
+
+      const content = response.data.choices[0].message.content;
+      const processedContent = opts.json ? this.ensureValidJSON(content) : content;
+
       return {
-        response: response.data.choices[0].message.content,
+        response: processedContent,
         totalTokens: response.data.usage?.total_tokens,
       };
     } catch (error) {
